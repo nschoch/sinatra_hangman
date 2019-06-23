@@ -1,25 +1,32 @@
 require 'sinatra'
+require 'sinatra/reloader' if development?
+
 enable :sessions
 
-message = 'Welcome to Hangman'
 
 get '/' do
 
-  locals = {:message => message }
-
+  message = 'Welcome to Hangman'
+  session[:game] = HangmanGame.new if (session[:game].nil? or session[:game].game_over)
+  guess = params['guess'].to_s.upcase
+  message = ''
+  message += session[:game].play(guess) if guess.nil? == false
+  message += session[:game].display_status
+  locals = { :message => message }
   erb :index, :locals => locals
 end
 
 class HangmanGame
+  attr_accessor :chances, :letters_guessed, :word, :game_over
 
   def initialize
     @chances = 8
     @file_path = '5desk.txt'
     @letters_guessed = []
-    load_save
     if @word.nil?
       @word = get_a_word
     end
+    @game_over = false
   end
 
   def get_a_word(min_length=5, max_length=12)
@@ -34,8 +41,8 @@ class HangmanGame
   end
 
   def display_status
-    puts "\n\n"
-    puts "Letters guessed: #{@letters_guessed.join(' ').to_s}"
+    message = "\n\n"
+    message += "<p>Letters guessed: #{@letters_guessed.join(' ').to_s}</p>"
     display_word = ''
     @word.split('').each do |x|
       if @letters_guessed.any?(x)
@@ -44,44 +51,39 @@ class HangmanGame
         display_word = display_word + ' _'
       end
     end
-    puts display_word
-    puts "Remaining Chances: #{@chances}"
+    message += display_word
+    message += "<p>Remaining Chances: #{@chances}</p>"
   end
 
-  def play
-    display_status
-
-    while @chances > 0
-      puts "Guess or quit & save by inputting 'CTRL+C'"
-      guess = gets.chomp.upcase
+  def play(guess)
+    message = ''
+    if @chances > 0
       if guess.length > 1
-        puts "You're guessing the word! #{guess}"
+        message += "<p>You're guessing the word! #{guess}</p>"
         if guess == @word
-          puts "You got it!"
-          remove_save
-          exit
+          message += "<p>You got it!</p>"
+          @game_over = true
         else
-          puts "You didn't get it!"
+          message += "<p>You didn't get it!</p>"
         end
       else
-        puts "Your guess was #{guess}"
+        message += "<p>Your guess was #{guess}</p>"
         if @letters_guessed.any?(guess)
-          puts "You already guessed #{guess}"
+          message += "<p>You already guessed #{guess}</p>"
         else
           if (@word.split('').any?(guess))
-            puts "You got one!"
+            message += "<p>You got one!</p>"
           else
-            puts "Miss"
+            message += "<p>Miss</p>"
           end
           @letters_guessed << guess
         end
       end
       @chances -= 1
-      save_to_yaml
-      display_status
+    else
+      message += "<p>The word was #{@word}.</p>"
+      @game_over = true
     end
-
-    puts "The word was #{@word}."
-    remove_save
+    return message
   end
 end
